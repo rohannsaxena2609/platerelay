@@ -53,7 +53,7 @@ sequenceDiagram
 
 ## Quick start
 
-> Prerequisites: JDK 25, Docker, and Docker Compose.
+> Prerequisites: Docker and Docker Compose. The container build uses JDK 25.
 
 ```bash
 git clone https://github.com/rohannsaxena2609/platerelay.git
@@ -62,12 +62,31 @@ docker compose up --build
 ```
 
 The API will be available at `http://localhost:8080`. Interactive API docs are
-at `/swagger-ui.html`; health is at `/actuator/health`.
+at `http://localhost:8080/swagger-ui.html`; health is at
+`http://localhost:8080/actuator/health`. Local identity is seeded in Keycloak at
+`http://localhost:9090` with donor, recipient, and admin demo users. Their local
+passwords are intentionally for development only.
+
+Get a local donor token, then use the Swagger UI **Authorize** button or send it
+as a bearer token:
+
+```bash
+curl -s http://localhost:9090/realms/platerelay/protocol/openid-connect/token \
+  -d client_id=platerelay-cli \
+  -d grant_type=password \
+  -d username=donor-dev \
+  -d password=donor-local-2026
+```
+
+The local admin registers recipients; recipient users discover and claim food.
+For the complete API contract, roles, request fields, and lifecycle, see
+[the API guide](docs/API.md).
 
 ## API preview
 
 ```http
 POST /api/v1/donations
+Authorization: Bearer <donor-token>
 Content-Type: application/json
 
 {
@@ -85,7 +104,10 @@ Content-Type: application/json
 ```http
 GET /api/v1/matches?latitude=12.9716&longitude=77.5946&radiusKm=8
 POST /api/v1/donations/{donationId}/claims
+Authorization: Bearer <recipient-token>
+Idempotency-Key: a-unique-request-id
 POST /api/v1/claims/{claimId}/complete
+Authorization: Bearer <recipient-token>
 ```
 
 ## Project map
@@ -104,11 +126,11 @@ See [the product brief](docs/PRODUCT.md) and [the API contract](docs/API.md).
 ## Roadmap
 
 - [x] Product brief, domain boundaries, and API sketch
-- [ ] Spring Boot foundation and local database
-- [ ] Donation and recipient workflows
-- [ ] Geo-aware match ranking and atomic claims
-- [ ] Security, observability, and API documentation
-- [ ] Containerized local run and CI
+- [x] Spring Boot foundation and local database
+- [x] Donation and recipient workflows
+- [x] Geo-aware match ranking and atomic claims
+- [x] Security, observability, and API documentation
+- [x] Containerized local run and CI
 
 ## License
 

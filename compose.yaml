@@ -1,0 +1,48 @@
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: platerelay
+      POSTGRES_USER: platerelay
+      POSTGRES_PASSWORD: platerelay
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U platerelay -d platerelay"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  identity:
+    image: quay.io/keycloak/keycloak:26.4
+    command: ["start-dev", "--import-realm", "--hostname", "http://localhost:9090"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: local-admin-only
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "9090:8080"
+    volumes:
+      - ./keycloak/platerelay-realm.json:/opt/keycloak/data/import/platerelay-realm.json:ro
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+      identity:
+        condition: service_started
+    environment:
+      DATABASE_URL: jdbc:postgresql://db:5432/platerelay
+      DATABASE_USER: platerelay
+      DATABASE_PASSWORD: platerelay
+      SECURITY_ISSUER_URI: http://localhost:9090/realms/platerelay
+      SECURITY_JWK_SET_URI: http://identity:8080/realms/platerelay/protocol/openid-connect/certs
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres-data:
+
