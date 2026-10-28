@@ -36,6 +36,9 @@ public class ClaimService {
         if (actorRecipientId == null || !actorRecipientId.equals(request.recipientId())) {
             throw new AccessDeniedException("A recipient can claim food only for its own location.");
         }
+        if (idempotencyKey != null && idempotencyKey.length() > 128) {
+            throw new IllegalArgumentException("Idempotency-Key must be 128 characters or fewer.");
+        }
         Donation donation = donationService.lock(donationId);
         if (idempotencyKey != null) {
             Claim previous = claims.findByIdempotencyKey(idempotencyKey).orElse(null);
@@ -60,7 +63,7 @@ public class ClaimService {
             throw new IllegalStateException("This donation has expired.");
         }
         if (donation.getStatus() != DonationStatus.AVAILABLE
-                || claims.existsByDonationIdAndStatus(donationId, ClaimStatus.RESERVED)) {
+                || claims.existsByDonation_IdAndStatus(donationId, ClaimStatus.RESERVED)) {
             throw new IllegalStateException("This donation is no longer available to claim.");
         }
 
