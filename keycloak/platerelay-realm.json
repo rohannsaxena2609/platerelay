@@ -1,0 +1,78 @@
+{
+  "realm": "platerelay",
+  "enabled": true,
+  "displayName": "PlateRelay Local",
+  "roles": {
+    "realm": [
+      { "name": "DONOR", "description": "Publish and manage a donor's surplus food" },
+      { "name": "RECIPIENT", "description": "Find, reserve, and collect surplus food" },
+      { "name": "ADMIN", "description": "Register recipient organizations" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "platerelay-cli",
+      "name": "PlateRelay local API client",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": false,
+      "protocolMappers": [
+        {
+          "name": "donor_id claim",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "donor_id",
+            "claim.name": "donor_id",
+            "jsonType.label": "String",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "recipient_id claim",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "recipient_id",
+            "claim.name": "recipient_id",
+            "jsonType.label": "String",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "donor-dev",
+      "enabled": true,
+      "emailVerified": true,
+      "attributes": { "donor_id": ["market-17"] },
+      "credentials": [{ "type": "password", "value": "donor-local-2026", "temporary": false }],
+      "realmRoles": ["DONOR"]
+    },
+    {
+      "username": "recipient-dev",
+      "enabled": true,
+      "emailVerified": true,
+      "attributes": { "recipient_id": ["fridge-east"] },
+      "credentials": [{ "type": "password", "value": "recipient-local-2026", "temporary": false }],
+      "realmRoles": ["RECIPIENT"]
+    },
+    {
+      "username": "admin-dev",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "admin-local-2026", "temporary": false }],
+      "realmRoles": ["ADMIN"]
+    }
+  ]
+}
