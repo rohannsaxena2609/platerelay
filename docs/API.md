@@ -10,7 +10,7 @@ are provisioned by the included Keycloak realm import.
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `POST` | `/donations` | Publish a time-bounded surplus lot. |
-| `GET` | `/donations` | Browse currently available donations. |
+| `GET` | `/donations?page=0&size=20` | Browse available donations, ordered by soonest expiry. Page size is capped at 100. |
 | `GET` | `/donations/{id}` | Read one donation and its current lifecycle state. |
 | `POST` | `/donations/{id}/cancel` | Cancel an available donation. |
 | `POST` | `/recipients` | Admin registers a recipient pickup location and capacity. |

@@ -6,6 +6,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,9 +39,13 @@ public class DonationService {
     }
 
     @Transactional(readOnly = true)
-    public List<DonationResponse> browse() {
-        return donations.findByStatusAndAvailableUntilAfter(DonationStatus.AVAILABLE, clock.instant())
-                .stream().map(DonationResponse::from).toList();
+    public DonationPageResponse browse(int page, int size) {
+        var pageable = PageRequest.of(page, size, Sort.by(
+                Sort.Order.asc("availableUntil"), Sort.Order.asc("id")));
+        var results = donations.findByStatusAndAvailableUntilAfter(DonationStatus.AVAILABLE, clock.instant(), pageable);
+        return new DonationPageResponse(results.getContent().stream().map(DonationResponse::from).toList(),
+                results.getNumber(), results.getSize(), results.getTotalElements(), results.getTotalPages(),
+                results.hasNext());
     }
 
     @Transactional

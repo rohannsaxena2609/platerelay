@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import org.hibernate.annotations.BatchSize;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -47,6 +48,7 @@ public class Donation {
     private double longitude;
 
     @ElementCollection
+    @BatchSize(size = 64)
     @CollectionTable(name = "donation_dietary_tags", joinColumns = @JoinColumn(name = "donation_id"))
     @Column(name = "tag", nullable = false, length = 40)
     private Set<String> dietaryTags = new LinkedHashSet<>();

@@ -1,6 +1,7 @@
 package dev.platerelay.platform.web;
 
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.validation.ConstraintViolationException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.util.stream.Collectors;
@@ -36,6 +37,12 @@ public class ApiExceptionHandler {
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .collect(Collectors.joining("; "));
         return problem(HttpStatus.BAD_REQUEST, "Validation failed", detail, request);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    ResponseEntity<ProblemDetail> constraintViolation(ConstraintViolationException exception,
+                                                       HttpServletRequest request) {
+        return problem(HttpStatus.BAD_REQUEST, "Validation failed", exception.getMessage(), request);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
