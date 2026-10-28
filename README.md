@@ -62,6 +62,10 @@ cd platerelay
 docker compose up --build
 ```
 
+Compose waits for PostgreSQL and Keycloak to report healthy before starting the
+API. To run the services in the background instead, use
+`docker compose up --build -d`.
+
 The API will be available at `http://localhost:8080`. Interactive API docs are
 at `http://localhost:8080/swagger-ui.html`; health is at
 `http://localhost:8080/actuator/health`. Local identity is seeded in Keycloak at

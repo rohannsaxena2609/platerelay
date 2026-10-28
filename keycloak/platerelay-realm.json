@@ -53,24 +53,36 @@
   "users": [
     {
       "username": "donor-dev",
+      "firstName": "Demo",
+      "lastName": "Donor",
+      "email": "donor@example.com",
       "enabled": true,
       "emailVerified": true,
+      "requiredActions": [],
       "attributes": { "donor_id": ["market-17"] },
       "credentials": [{ "type": "password", "value": "donor-local-2026", "temporary": false }],
       "realmRoles": ["DONOR"]
     },
     {
       "username": "recipient-dev",
+      "firstName": "Demo",
+      "lastName": "Recipient",
+      "email": "recipient@example.com",
       "enabled": true,
       "emailVerified": true,
+      "requiredActions": [],
       "attributes": { "recipient_id": ["fridge-east"] },
       "credentials": [{ "type": "password", "value": "recipient-local-2026", "temporary": false }],
       "realmRoles": ["RECIPIENT"]
     },
     {
       "username": "admin-dev",
+      "firstName": "Local",
+      "lastName": "Admin",
+      "email": "admin@example.com",
       "enabled": true,
       "emailVerified": true,
+      "requiredActions": [],
       "credentials": [{ "type": "password", "value": "admin-local-2026", "temporary": false }],
       "realmRoles": ["ADMIN"]
     }
