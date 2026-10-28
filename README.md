@@ -6,6 +6,7 @@
     <img alt="Java 25" src="https://img.shields.io/badge/Java-25-ef6c35?style=for-the-badge&logo=openjdk&logoColor=white" />
     <img alt="Spring Boot 4" src="https://img.shields.io/badge/Spring_Boot-4-6db33f?style=for-the-badge&logo=springboot&logoColor=white" />
     <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-18-4169e1?style=for-the-badge&logo=postgresql&logoColor=white" />
+    <a href="https://github.com/rohannsaxena2609/platerelay/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/rohannsaxena2609/platerelay/actions/workflows/ci.yml/badge.svg" /></a>
     <img alt="MIT license" src="https://img.shields.io/badge/License-MIT-8b5cf6?style=for-the-badge" />
   </p>
 </div>
@@ -21,7 +22,7 @@ and confirm the handoff before the pickup window closes.
 
 | Capability | What it does |
 | --- | --- |
-| **Live listings** | Filter available donations by radius, category, dietary tags, and pickup deadline. |
+| **Live listings** | Browse available donations in bounded pages ordered by soonest expiry. |
 | **Explainable matching** | Rank recipient opportunities by proximity and urgency with transparent match reasons. |
 | **Safe reservations** | Atomic claim transitions prevent two recipients from collecting the same lot. |
 | **Expiry lifecycle** | Scheduled cleanup closes expired offers and releases stale reservations. |
@@ -66,6 +67,15 @@ at `http://localhost:8080/swagger-ui.html`; health is at
 `http://localhost:8080/actuator/health`. Local identity is seeded in Keycloak at
 `http://localhost:9090` with donor, recipient, and admin demo users. Their local
 passwords are intentionally for development only.
+
+Run the full publish → match → reserve → pickup flow after the services start:
+
+```bash
+./scripts/demo.sh
+```
+
+The script uses `curl`, `jq`, and Python 3. Override its local demo credentials
+with the `PLATERELAY_*_USER` and `PLATERELAY_*_PASSWORD` environment variables.
 
 Get a local donor token, then use the Swagger UI **Authorize** button or send it
 as a bearer token:
