@@ -2,6 +2,7 @@
   "realm": "platerelay",
   "enabled": true,
   "displayName": "PlateRelay Local",
+  "accessTokenLifespan": 900,
   "roles": {
     "realm": [
       { "name": "DONOR", "description": "Publish and manage a donor's surplus food" },
