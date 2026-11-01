@@ -12,14 +12,15 @@
   </p>
 </div>
 
-PlateRelay is a backend for food rescue workflows. Donors publish time-bounded
+PlateRelay is a food rescue coordination backend. Donors publish time-bounded
 surplus lots, recipient organizations discover eligible nearby food, and a
-transactional claim flow protects the pickup handoff from double booking.
+transactional claim flow protects the pickup handoff from double booking. The
+upgrade adds a transactional Kafka outbox, an idempotent impact ledger, a
+review-only AI intake assistant, and an operational Grafana dashboard.
 
-> **Portfolio focus:** modular backend design, OAuth2/JWT authorization,
-> geospatial candidate filtering, explainable ranking, transactional state
-> changes, idempotent requests, scheduled expiry, and a reproducible Docker
-> development environment.
+> **Portfolio focus:** Java 25, Spring Boot 4, PostgreSQL transactions, Kafka
+> outbox delivery, OAuth2/JWT authorization, geospatial search, AI safety
+> controls, concurrency testing, metrics, and reproducible operations.
 
 ## Product flow
 
@@ -28,12 +29,15 @@ sequenceDiagram
     autonumber
     actor Donor
     participant API as PlateRelay API
+    participant Kafka as Kafka event stream
     actor Recipient
     Donor->>API: Publish donation with location and expiry
     Recipient->>API: Find nearby eligible donations
     API-->>Recipient: Ranked matches with score and reasons
     Recipient->>API: Reserve a donation
     API-->>Recipient: Claim confirmed, donation is reserved
+    API->>Kafka: Publish committed domain event through outbox
+    Kafka-->>API: Idempotent consumer updates impact ledger
     alt Food is collected
         Recipient->>API: Complete pickup
         API-->>Recipient: Claim and donation completed
@@ -58,14 +62,20 @@ flowchart LR
     API[Spring Boot 4 API<br/>Java 25]
     Auth[Keycloak<br/>OIDC / JWT]
     DB[(PostgreSQL 18<br/>Flyway schema)]
-    Metrics[Actuator<br/>Health + Prometheus]
+    Kafka[(Kafka 4.4<br/>KRaft)]
+    AI[OpenAI model<br/>optional / review-only]
+    Ops[Prometheus + Grafana]
 
     Donor -->|publish / cancel| API
     Recipient -->|match / claim / pickup| API
     Admin -->|register locations| API
     API <-->|issue / verify JWT| Auth
     API <-->|JPA transactions| DB
-    API --> Metrics
+    API -->|transactional outbox| Kafka
+    Kafka -->|deduplicated events| DB
+    Donor -. optional intake draft .-> AI
+    AI -. suggested fields, donor review .-> Donor
+    API --> Ops
 ```
 
 ## Engineering highlights
@@ -86,6 +96,23 @@ flowchart LR
   caller’s own identity and resources.
 - **Operational visibility:** health and info endpoints, Prometheus metrics,
   structured problem responses, OpenAPI docs, and container health checks.
+- **Reliable event delivery:** donation and claim lifecycle events are committed
+  to PostgreSQL in the same transaction as the business change. A leased,
+  retrying publisher sends them to Kafka; the impact consumer deduplicates by
+  event ID, so redelivery does not inflate totals.
+- **AI-assisted intake:** optional Spring AI/OpenAI structured suggestions turn
+  donor text into a draft. It never creates a donation, infers dietary or
+  allergen safety, or skips donor review. Suggestions retain the model and
+  prompt version for audit; the feature is disabled unless explicitly enabled.
+- **Measured operations:** Micrometer exposes matching request/result and
+  latency metrics alongside event, outbox, consumer, and standard HTTP metrics.
+  The optional Grafana stack provisions a PlateRelay dashboard automatically.
+- **Concurrency and persistence tests:** JUnit tests cover matching behavior,
+  role mapping, concurrent reservations, idempotency, release/completion,
+  stale-claim expiry, outbox writes, and impact-ledger deduplication against
+  PostgreSQL 18 via Testcontainers.
+- **Load profile:** `load/k6-smoke.js` exercises authenticated browse, publish,
+  and match traffic with latency and failure-rate thresholds.
 
 ### Matching score weights
 
@@ -123,6 +150,10 @@ stateDiagram-v2
 | Identity and access | Keycloak, OAuth2 Resource Server, JWT |
 | API documentation | OpenAPI 3, Springdoc, Swagger UI |
 | Operations | Spring Actuator, Micrometer Prometheus registry |
+| Event processing | Apache Kafka 4.4, transactional outbox, idempotent impact consumer |
+| AI-assisted intake | Spring AI 2, OpenAI structured output (optional, human-reviewed) |
+| Monitoring | Prometheus, Grafana (optional Compose profile) |
+| Testing | JUnit 5, Mockito, Spring Security Test, Testcontainers PostgreSQL |
 | Local environment | Docker Compose, multi-stage Docker image |
 | Continuous integration | GitHub Actions, Maven `verify` |
 
@@ -141,6 +172,7 @@ All endpoints are under `/api/v1` and require a bearer access token.
 | `POST` | `/donations/{id}/cancel` | Cancel an available donation | `DONOR`; owner only |
 | `GET` | `/matches` | Match by coordinates and optional dietary tags | Any authenticated user |
 | `GET` | `/matches/recipients/{recipientId}` | Match for recipient’s saved location and tags | `RECIPIENT`; own recipient ID only |
+| `POST` | `/donations/intake/suggestions` | Create an AI-assisted donation draft for review | `DONOR`; requires AI opt-in and API key |
 | `POST` | `/donations/{donationId}/claims` | Reserve an available donation | `RECIPIENT`; own recipient ID only |
 | `POST` | `/claims/{claimId}/complete` | Confirm pickup | `RECIPIENT`; claim owner only |
 | `POST` | `/claims/{claimId}/release` | Release a reservation | `RECIPIENT`; claim owner only |
@@ -164,8 +196,11 @@ cd platerelay
 docker compose up --build -d
 ```
 
-Docker Compose starts PostgreSQL, Keycloak, and the API. The API waits for the
-database and identity service health checks before starting.
+Docker Compose starts PostgreSQL, Keycloak, Kafka (KRaft), and the API. The API
+waits for the database, identity service, and broker health checks before
+starting. The AI helper is off by default. To enable it, set
+`PLATERELAY_AI_ENABLED=true` and `OPENAI_API_KEY` in the environment before
+starting Compose; this may incur OpenAI usage charges.
 
 | Service | Local URL |
 | --- | --- |
@@ -173,7 +208,9 @@ database and identity service health checks before starting.
 | OpenAPI JSON | <http://localhost:8080/v3/api-docs> |
 | API health | <http://localhost:8080/actuator/health> |
 | Prometheus metrics | <http://localhost:8080/actuator/prometheus> |
+| Impact activity summary | <http://localhost:8080/api/v1/impact/summary> (bearer token required) |
 | Keycloak realm | <http://localhost:9090/realms/platerelay> |
+| Kafka host listener | `localhost:9092` |
 
 ### Run the complete demo
 
@@ -186,6 +223,23 @@ it, and completes the pickup. It prints the generated donation and claim IDs
 and the match score/reasons. Demo credentials are local-development only; do
 not reuse them outside this environment. The script accepts
 `PLATERELAY_*_USER` and `PLATERELAY_*_PASSWORD` environment overrides.
+
+### Run monitoring
+
+```bash
+docker compose --profile monitoring up -d
+```
+
+Open <http://localhost:3000> and sign in with the local-only credentials
+`admin` / `admin`. Prometheus is available at <http://localhost:9091>.
+
+### Run the k6 smoke load
+
+The stack and demo recipient must be running. Run with Docker Desktop on macOS:
+
+```bash
+docker run --rm -e PLATERELAY_API_URL=http://host.docker.internal:8080 -e PLATERELAY_IDENTITY_URL=http://host.docker.internal:9090 -v "$PWD/load:/load:ro" grafana/k6 run /load/k6-smoke.js
+```
 
 To stop the services while keeping database data:
 
@@ -215,8 +269,12 @@ src/main/java/dev/platerelay/
 ├── recipient/      Pickup locations, capacity, dietary preferences
 ├── matching/       Candidate search, Haversine distance, ranking
 ├── claim/          Reservation, completion, release, expiry job
+├── events/         Transactional outbox, Kafka consumer, impact summary
+├── intake/         Optional AI-assisted donor draft with human review
 └── platform/       Security, OpenAPI, time, API error handling
 src/main/resources/db/migration/   Versioned PostgreSQL schema
+monitoring/                         Prometheus config and Grafana dashboard
+load/                               k6 authenticated smoke-load script
 keycloak/                           Local realm and demo identities
 scripts/demo.sh                     End-to-end API walkthrough
 docs/                               Product brief and API guide
@@ -225,10 +283,11 @@ docs/                               Product brief and API guide
 ## CI and build
 
 GitHub Actions runs Maven `verify` on pushes and pull requests to `main`, using
-Temurin Java 25. For a local package build, run:
+Temurin Java 25. For the full local unit and PostgreSQL integration suite, run
+with Java 25 and Docker Desktop available:
 
 ```bash
-mvn --batch-mode --no-transfer-progress verify
+mvn --batch-mode --no-transfer-progress clean verify
 ```
 
 ## Further reading
