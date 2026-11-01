@@ -26,9 +26,12 @@ public class SecurityConfiguration {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/actuator/health/**", "/actuator/info", "/v3/api-docs/**", "/swagger-ui/**",
+                        .requestMatchers("/actuator/health/**", "/actuator/info", "/actuator/prometheus",
+                                "/v3/api-docs/**", "/swagger-ui/**",
                                 "/swagger-ui.html").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/donations")
+                                .hasRole("DONOR")
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/donations/intake/suggestions")
                                 .hasRole("DONOR")
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/donations/*/cancel")
                                 .hasRole("DONOR")

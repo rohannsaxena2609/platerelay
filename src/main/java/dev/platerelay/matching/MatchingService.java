@@ -14,6 +14,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,25 +26,34 @@ public class MatchingService {
     private final DonationRepository donations;
     private final RecipientRepository recipients;
     private final Clock clock;
+    private final MeterRegistry metrics;
 
-    public MatchingService(DonationRepository donations, RecipientRepository recipients, Clock clock) {
+    public MatchingService(DonationRepository donations, RecipientRepository recipients, Clock clock,
+                           MeterRegistry metrics) {
         this.donations = donations;
         this.recipients = recipients;
         this.clock = clock;
+        this.metrics = metrics;
     }
 
     @Transactional(readOnly = true)
     public List<MatchResponse> findMatches(double latitude, double longitude, double radiusKm,
                                            Set<String> requiredTags) {
         Instant now = clock.instant();
+        long started = System.nanoTime();
         List<Donation> candidates = candidates(latitude, longitude, radiusKm, now);
-        return candidates.stream()
+        List<MatchResponse> matches = candidates.stream()
                 .map(donation -> score(donation, latitude, longitude, radiusKm, requiredTags, now))
                 .flatMap(java.util.Optional::stream)
                 .sorted(Comparator.comparingInt(MatchResponse::score).reversed()
                         .thenComparingLong(MatchResponse::minutesUntilExpiry))
                 .limit(50)
                 .toList();
+        metrics.counter("platerelay.matching.requests").increment();
+        metrics.counter("platerelay.matching.results").increment(matches.size());
+        Timer.builder("platerelay.matching.duration").register(metrics)
+                .record(System.nanoTime() - started, java.util.concurrent.TimeUnit.NANOSECONDS);
+        return matches;
     }
 
     @Transactional(readOnly = true)

@@ -1,6 +1,21 @@
 spring:
   application:
     name: platerelay-api
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY:local-ai-disabled}
+  kafka:
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+    consumer:
+      group-id: platerelay-impact-ledger
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/platerelay}
     username: ${DATABASE_USER:platerelay}
@@ -30,6 +45,11 @@ server:
     include-stacktrace: never
 
 management:
+  metrics:
+    distribution:
+      percentiles-histogram:
+        "http.server.requests": true
+        "platerelay.matching.duration": true
   endpoints:
     web:
       exposure:
@@ -53,6 +73,11 @@ springdoc:
     path: /swagger-ui.html
 
 platerelay:
+  events:
+    enabled: ${PLATERELAY_EVENTS_ENABLED:false}
+    topic: ${PLATERELAY_EVENTS_TOPIC:platerelay.domain-events}
+  ai:
+    enabled: ${PLATERELAY_AI_ENABLED:false}
   expiry:
     scan-delay: ${EXPIRY_SCAN_DELAY:60000}
 
