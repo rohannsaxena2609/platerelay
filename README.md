@@ -33,13 +33,13 @@ sequenceDiagram
     Recipient->>API: Find nearby eligible donations
     API-->>Recipient: Ranked matches with score and reasons
     Recipient->>API: Reserve a donation
-    API-->>Recipient: Claim confirmed; donation is reserved
+    API-->>Recipient: Claim confirmed, donation is reserved
     alt Food is collected
         Recipient->>API: Complete pickup
         API-->>Recipient: Claim and donation completed
     else Pickup cannot happen
         Recipient->>API: Release reservation
-        API-->>Recipient: Claim released; donation may be available again
+        API-->>Recipient: Claim released, donation may be available again
     end
 ```
 
