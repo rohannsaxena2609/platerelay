@@ -1,10 +1,12 @@
 package dev.platerelay.donation;
 
 import jakarta.persistence.EntityNotFoundException;
+import dev.platerelay.events.DomainEventRecorder;
 import org.springframework.security.access.AccessDeniedException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -15,10 +17,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class DonationService {
     private final DonationRepository donations;
     private final Clock clock;
+    private final DomainEventRecorder events;
 
-    public DonationService(DonationRepository donations, Clock clock) {
+    public DonationService(DonationRepository donations, Clock clock, DomainEventRecorder events) {
         this.donations = donations;
         this.clock = clock;
+        this.events = events;
     }
 
     @Transactional
@@ -30,7 +34,11 @@ public class DonationService {
                 request.quantity(), request.unit(), request.availableUntil(), request.pickup().latitude(),
                 request.pickup().longitude(), request.dietaryTags() == null ? java.util.Set.of() : request.dietaryTags(),
                 clock.instant());
-        return DonationResponse.from(donations.save(donation));
+        Donation saved = donations.save(donation);
+        events.record("donation.published", saved.getId().toString(),
+                Map.of("quantity", saved.getQuantity(), "unit", saved.getUnit().name(),
+                        "availableUntil", saved.getAvailableUntil()));
+        return DonationResponse.from(saved);
     }
 
     @Transactional(readOnly = true)
@@ -55,6 +63,7 @@ public class DonationService {
             throw new AccessDeniedException("A donor can cancel only its own donation.");
         }
         donation.cancel();
+        events.record("donation.cancelled", donation.getId().toString(), Map.of());
         return DonationResponse.from(donation);
     }
 
@@ -62,7 +71,10 @@ public class DonationService {
     public int expireAvailableDonations() {
         List<Donation> stale = donations.findByStatusAndAvailableUntilBefore(DonationStatus.AVAILABLE,
                 clock.instant());
-        stale.forEach(Donation::expire);
+        stale.forEach(donation -> {
+            donation.expire();
+            events.record("donation.expired", donation.getId().toString(), Map.of());
+        });
         return stale.size();
     }
 

@@ -3,6 +3,7 @@ package dev.platerelay.claim;
 import dev.platerelay.donation.Donation;
 import dev.platerelay.donation.DonationService;
 import dev.platerelay.donation.DonationStatus;
+import dev.platerelay.events.DomainEventRecorder;
 import dev.platerelay.recipient.RecipientRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.security.access.AccessDeniedException;
@@ -12,6 +13,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,12 +25,14 @@ public class ClaimService {
     private final ClaimRepository claims;
     private final RecipientRepository recipients;
     private final DonationService donationService;
+    private final DomainEventRecorder events;
 
     public ClaimService(ClaimRepository claims, RecipientRepository recipients,
-                       DonationService donationService) {
+                       DonationService donationService, DomainEventRecorder events) {
         this.claims = claims;
         this.recipients = recipients;
         this.donationService = donationService;
+        this.events = events;
     }
 
     @Transactional
@@ -73,7 +77,9 @@ public class ClaimService {
             reservedUntil = donation.getAvailableUntil();
         }
         Claim claim = new Claim(donation, request.recipientId(), idempotencyKey, now, reservedUntil);
-        return ClaimResponse.from(claims.save(claim));
+        Claim saved = claims.save(claim);
+        events.record("claim.reserved", saved.getId().toString(), Map.of("donationId", donationId.toString()));
+        return ClaimResponse.from(saved);
     }
 
     @Transactional
@@ -85,6 +91,8 @@ public class ClaimService {
         Instant now = donationService.now();
         claim.complete(now);
         donation.complete();
+        events.record("claim.completed", claim.getId().toString(),
+                Map.of("donationId", donation.getId().toString()));
         return ClaimResponse.from(claim);
     }
 
@@ -96,6 +104,8 @@ public class ClaimService {
         Donation donation = donationService.lock(claim.getDonation().getId());
         claim.release();
         donation.release(donationService.now());
+        events.record("claim.released", claim.getId().toString(),
+                Map.of("donationId", donation.getId().toString()));
         return ClaimResponse.from(claim);
     }
 
@@ -117,6 +127,8 @@ public class ClaimService {
             }
             claim.expire();
             donation.release(now);
+            events.record("claim.expired", claim.getId().toString(),
+                    Map.of("donationId", donation.getId().toString()));
             expired++;
         }
         return expired;
