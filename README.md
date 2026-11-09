@@ -329,8 +329,12 @@ docs/                               Product brief and API guide
 ## CI and build
 
 GitHub Actions runs Maven `verify` on pushes and pull requests to `main`, using
-Temurin Java 25. For the full local unit and PostgreSQL integration suite, run
-with Java 25 and Docker Desktop available:
+Temurin Java 25. CodeQL scans the Java code on pushes, pull requests, and a
+weekly schedule. Dependency Review checks pull requests for newly introduced
+high-severity vulnerabilities. The intake integration tests also verify that
+only the owning donor can review a suggestion and that non-donor and
+unauthenticated requests are rejected. For the full local unit and PostgreSQL
+integration suite, run with Java 25 and Docker Desktop available:
 
 ```bash
 mvn --batch-mode --no-transfer-progress clean verify
