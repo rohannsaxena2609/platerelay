@@ -120,6 +120,34 @@ flowchart LR
 - **Load profile:** `load/k6-smoke.js` exercises authenticated browse, publish,
   and match traffic with latency and failure-rate thresholds.
 
+## Challenges & solutions
+
+- **Preventing double claims under concurrency:** two recipients can request the
+  same donation at nearly the same time. A PostgreSQL write lock serializes the
+  state transition; an optional idempotency key makes safe retries predictable.
+- **Keeping database changes and Kafka events consistent:** a database commit
+  and a broker publish cannot share one transaction. The transactional outbox
+  records the event with the domain change, then a retrying publisher delivers
+  it. The consumer deduplicates event IDs so redelivery does not double-count
+  impact.
+- **Enforcing ownership as well as role:** checking only `DONOR` or `RECIPIENT`
+  would let one organization act on another's resources. Write flows also
+  compare the signed `donor_id` or `recipient_id` claim with the requested
+  resource identity.
+- **Making AI useful without letting it publish unsafe data:** free-form food
+  descriptions need structured output, but the model must not guess pickup
+  details or dietary safety. PlateRelay validates the draft, stores its model
+  and prompt version, and requires the owning donor to approve or reject it.
+  Approval creates the donation and its outbox event atomically.
+- **Handling provider and model changes without coupling the app to one host:**
+  the OpenAI-compatible base URL, API key, and model are configured outside the
+  image. This lets local development use a gateway such as OmniRoute while
+  keeping AI optional and disabled by default.
+- **Reproducing database behavior in tests:** persistence, locks, and migrations
+  can behave differently from mocks. PostgreSQL Testcontainers run the
+  integration tests against a real database, including review, donation
+  creation, and outbox persistence.
+
 ### Matching score weights
 
 The chart shows the configured contribution to the 100-point ranking score;
