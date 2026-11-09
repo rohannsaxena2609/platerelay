@@ -10,17 +10,25 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @Testcontainers
+@AutoConfigureMockMvc
 class DonationIntakeReviewIntegrationTest {
     @Container
     private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
@@ -40,6 +48,7 @@ class DonationIntakeReviewIntegrationTest {
     @Autowired private AiIntakeSuggestionRepository suggestions;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private ObjectMapper objectMapper;
+    @Autowired private MockMvc mockMvc;
 
     @Test
     void approvalPersistsDonationReviewAndOutboxAtomicallyAndRetryDoesNotDuplicate() throws Exception {
@@ -88,5 +97,57 @@ class DonationIntakeReviewIntegrationTest {
         assertThat(suggestions.findById(suggestionId).orElseThrow().getReviewedAt()).isNotNull();
         assertThat(jdbc.queryForObject("select count(*) from donations where donor_id = ?", Integer.class,
                 donorId)).isZero();
+    }
+
+    @Test
+    void donorRoleCannotReviewAnotherDonorsSuggestionThroughHttp() throws Exception {
+        String ownerId = "suggestion-owner-" + UUID.randomUUID();
+        UUID suggestionId = savePendingSuggestion(ownerId);
+
+        mockMvc.perform(post("/api/v1/donations/intake/suggestions/{id}/review", suggestionId)
+                        .with(jwt().jwt(token -> token.claim("donor_id", "different-donor"))
+                                .authorities(new SimpleGrantedAuthority("ROLE_DONOR")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"REJECT\"}"))
+                .andExpect(status().isForbidden());
+
+        assertThat(suggestions.findById(suggestionId).orElseThrow().getStatus()).isEqualTo("PENDING_REVIEW");
+        assertThat(jdbc.queryForObject("select count(*) from donations where donor_id = ?", Integer.class,
+                ownerId)).isZero();
+    }
+
+    @Test
+    void recipientRoleCannotCallDonorReviewEndpointThroughHttp() throws Exception {
+        String donorId = "suggestion-owner-" + UUID.randomUUID();
+        UUID suggestionId = savePendingSuggestion(donorId);
+
+        mockMvc.perform(post("/api/v1/donations/intake/suggestions/{id}/review", suggestionId)
+                        .with(jwt().jwt(token -> token.claim("donor_id", donorId))
+                                .authorities(new SimpleGrantedAuthority("ROLE_RECIPIENT")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"REJECT\"}"))
+                .andExpect(status().isForbidden());
+
+        assertThat(suggestions.findById(suggestionId).orElseThrow().getStatus()).isEqualTo("PENDING_REVIEW");
+    }
+
+    @Test
+    void unauthenticatedRequestCannotReachDonorReviewEndpoint() throws Exception {
+        UUID suggestionId = UUID.randomUUID();
+
+        mockMvc.perform(post("/api/v1/donations/intake/suggestions/{id}/review", suggestionId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"REJECT\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    private UUID savePendingSuggestion(String donorId) throws Exception {
+        UUID suggestionId = UUID.randomUUID();
+        var draft = new DonationIntakeDraft("Fresh vegetables", "Vegetables for pickup", 4,
+                dev.platerelay.donation.FoodUnit.BOX);
+        suggestions.save(new AiIntakeSuggestion(suggestionId, donorId,
+                "Four boxes of vegetables", objectMapper.writeValueAsString(draft),
+                "test-model", "donation-intake-v1", "PENDING_REVIEW", Instant.now()));
+        return suggestionId;
     }
 }
