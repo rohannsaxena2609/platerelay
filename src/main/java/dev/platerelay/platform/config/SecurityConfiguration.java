@@ -33,6 +33,8 @@ public class SecurityConfiguration {
                                 .hasRole("DONOR")
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/donations/intake/suggestions")
                                 .hasRole("DONOR")
+                        .requestMatchers(org.springframework.http.HttpMethod.POST,
+                                "/api/v1/donations/intake/suggestions/*/review").hasRole("DONOR")
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/donations/*/cancel")
                                 .hasRole("DONOR")
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/recipients")

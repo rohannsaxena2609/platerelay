@@ -32,6 +32,10 @@ sequenceDiagram
     participant Kafka as Kafka event stream
     actor Recipient
     Donor->>API: Publish donation with location and expiry
+    Donor->>API: Submit food description for AI draft
+    API-->>Donor: Return structured draft marked PENDING_REVIEW
+    Donor->>API: Approve or reject draft
+    API-->>Donor: On approval, publish donation through normal lifecycle
     Recipient->>API: Find nearby eligible donations
     API-->>Recipient: Ranked matches with score and reasons
     Recipient->>API: Reserve a donation
@@ -101,8 +105,10 @@ flowchart LR
   retrying publisher sends them to Kafka; the impact consumer deduplicates by
   event ID, so redelivery does not inflate totals.
 - **AI-assisted intake:** optional Spring AI/OpenAI structured suggestions turn
-  donor text into a draft. It never creates a donation, infers dietary or
-  allergen safety, or skips donor review. Suggestions retain the model and
+  donor text into a draft. It never publishes automatically or infers dietary
+  or allergen safety. The donor must explicitly approve or reject the draft;
+  approval requires pickup location and expiry, then publishes through the
+  normal donation and transactional outbox flow. Suggestions retain model and
   prompt version for audit; the feature is disabled unless explicitly enabled.
 - **Measured operations:** Micrometer exposes matching request/result and
   latency metrics alongside event, outbox, consumer, and standard HTTP metrics.
@@ -173,6 +179,7 @@ All endpoints are under `/api/v1` and require a bearer access token.
 | `GET` | `/matches` | Match by coordinates and optional dietary tags | Any authenticated user |
 | `GET` | `/matches/recipients/{recipientId}` | Match for recipient’s saved location and tags | `RECIPIENT`; own recipient ID only |
 | `POST` | `/donations/intake/suggestions` | Create an AI-assisted donation draft for review | `DONOR`; requires AI opt-in and API key |
+| `POST` | `/donations/intake/suggestions/{id}/review` | Approve and publish a draft, or reject it | `DONOR`; suggestion owner only |
 | `POST` | `/donations/{donationId}/claims` | Reserve an available donation | `RECIPIENT`; own recipient ID only |
 | `POST` | `/claims/{claimId}/complete` | Confirm pickup | `RECIPIENT`; claim owner only |
 | `POST` | `/claims/{claimId}/release` | Release a reservation | `RECIPIENT`; claim owner only |
@@ -198,9 +205,20 @@ docker compose up --build -d
 
 Docker Compose starts PostgreSQL, Keycloak, Kafka (KRaft), and the API. The API
 waits for the database, identity service, and broker health checks before
-starting. The AI helper is off by default. To enable it, set
-`PLATERELAY_AI_ENABLED=true` and `OPENAI_API_KEY` in the environment before
-starting Compose; this may incur OpenAI usage charges.
+starting. The AI helper is off by default. To enable it, set the following in
+the project root `.env` file before starting Compose (keep this file private):
+
+```dotenv
+PLATERELAY_AI_ENABLED=true
+OPENAI_API_KEY=<provider-or-gateway-key>
+SPRING_AI_OPENAI_BASE_URL=http://host.docker.internal:20128
+SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL=<model-id-from-your-gateway>
+```
+
+The base URL and model can target an OpenAI-compatible gateway such as
+OmniRoute; use the model ID shown by that gateway. With no gateway configured,
+the defaults target OpenAI. Provider usage may incur charges or have free-tier
+limits.
 
 | Service | Local URL |
 | --- | --- |

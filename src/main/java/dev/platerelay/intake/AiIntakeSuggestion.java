@@ -26,6 +26,10 @@ public class AiIntakeSuggestion {
     private String status;
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
+    @Column(name = "reviewed_at")
+    private Instant reviewedAt;
+    @Column(name = "donation_id")
+    private UUID donationId;
 
     protected AiIntakeSuggestion() {}
 
@@ -40,4 +44,21 @@ public class AiIntakeSuggestion {
         this.status = status;
         this.createdAt = createdAt;
     }
+
+    public void review(String decision, Instant reviewedAt, UUID donationId) {
+        if (!"PENDING_REVIEW".equals(status)) {
+            throw new IllegalStateException("Suggestion has already been reviewed.");
+        }
+        this.status = decision;
+        this.reviewedAt = reviewedAt;
+        this.donationId = donationId;
+    }
+
+    public UUID getId() { return id; }
+    public String getDonorId() { return donorId; }
+    public String getSuggestedPayload() { return suggestedPayload; }
+    public String getStatus() { return status; }
+    public Instant getCreatedAt() { return createdAt; }
+    public Instant getReviewedAt() { return reviewedAt; }
+    public UUID getDonationId() { return donationId; }
 }

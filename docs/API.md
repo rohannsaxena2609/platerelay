@@ -13,6 +13,8 @@ are provisioned by the included Keycloak realm import.
 | `GET` | `/donations?page=0&size=20` | Browse available donations, ordered by soonest expiry. Page size is capped at 100. |
 | `GET` | `/donations/{id}` | Read one donation and its current lifecycle state. |
 | `POST` | `/donations/{id}/cancel` | Cancel an available donation. |
+| `POST` | `/donations/intake/suggestions` | Create an optional AI-generated draft; response is always `PENDING_REVIEW`. |
+| `POST` | `/donations/intake/suggestions/{id}/review` | Donor-owner approves or rejects a draft. Approval publishes a normal donation. |
 | `POST` | `/recipients` | Admin registers a recipient pickup location and capacity. |
 | `GET` | `/recipients` | List registered recipients. |
 | `GET` | `/recipients/{id}` | Read one recipient profile. |
@@ -32,6 +34,38 @@ exact Haversine distance check.
 The `Idempotency-Key` header on claim creation is optional. When supplied, a
 retry with the same key, donation, and recipient returns the original claim.
 Keys are unique and limited to 128 characters.
+
+## AI-assisted intake and human review
+
+AI intake is optional and disabled by default. `POST /donations/intake/suggestions`
+accepts `{ "description": "12 boxes of vegetables available today" }` and
+returns a suggestion ID and structured draft with `PENDING_REVIEW`. The model
+does not publish a donation. A donor can review only suggestions created under
+the donor ID in their signed token.
+
+To reject a draft, submit:
+
+```json
+{ "decision": "REJECT" }
+```
+
+To approve it, provide the pickup details the model cannot infer safely:
+
+```json
+{
+  "decision": "APPROVE",
+  "availableUntil": "2026-11-10T18:00:00Z",
+  "pickup": { "latitude": 12.973, "longitude": 77.6 },
+  "dietaryTags": []
+}
+```
+
+An approval creates an `AVAILABLE` donation and its `donation.published` event
+in the same database transaction as the suggestion state change. The response
+includes the published donation. Repeating the same decision returns the
+existing result; attempting the opposite decision returns `409 Conflict`.
+Approving without a future expiry and pickup coordinates returns `400 Bad
+Request`. A donor cannot review another donor's suggestion.
 
 ## Donation lifecycle
 
